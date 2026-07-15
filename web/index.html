@@ -121,6 +121,16 @@
     <div id="drill"></div>
   </div>
 
+  <!-- ============ REASONING CEILING (depth sweep) ============ -->
+  <div class="card" id="ceilingcard" style="display:none">
+    <h2>The reasoning ceiling — accuracy vs depth</h2>
+    <p class="sub">Ungated sweep, 8 → 40 sequential steps (the pilot gate is off here on purpose:
+       the failures are the point). <b>prose</b> = the ceiling with reasoning allowed ·
+       <b>json</b> = the no-scratchpad floor · <b>strict_schema</b> = does a reasoning field survive depth?</p>
+    <div id="ceiling"></div>
+    <div id="ceildrill"></div>
+  </div>
+
   <!-- ============ LIVE PANEL (stretch) ============ -->
   <div class="card">
     <h2>Try it yourself — live</h2>
@@ -260,6 +270,111 @@ function renderDrill(){
       <i>${esc(cond)}</i> — the tax, per item.</p>`);
 }
 
+// ---------- Reasoning ceiling (depth sweep) ----------
+const CEIL_COLORS = {prose:'#2a78d6', json:'#e34948', strict_schema:'#eb6834'};
+let CEIL = null, CEIL_SHARDS = {}, CEIL_SEL = null;
+
+async function fetchFirst(paths){
+  for (const p of paths){
+    try { const r = await fetch(p, {cache:'no-store'}); if (r.ok) return await r.json(); } catch(e){}
+  }
+  return null;
+}
+async function loadCeiling(){ return fetchFirst(['ceiling.json','/ceiling.json']); }
+
+// Each level's responses live in their own file, fetched on click — shipping all
+// six up front would be ~5MB for a chart most visitors only glance at.
+async function loadShard(level){
+  const f = `ceiling/level_${String(level).padStart(2,'0')}.json`;
+  if (!CEIL_SHARDS[level]) CEIL_SHARDS[level] = await fetchFirst([f, '/' + f]);
+  return CEIL_SHARDS[level];
+}
+
+function ceilCounts(cond, level){
+  const b = (CEIL.buckets || {})[cond]?.[level] || {};
+  const n = (b.correct||0) + (b.wrong||0) + (b.unparseable||0);
+  return {n, ...b};
+}
+
+async function ceilDrill(level, cond){
+  CEIL_SEL = {level, cond};
+  renderCeiling(CEIL);   // repaint so the selected point shows its ring
+  $('ceildrill').innerHTML = `<p class="hint">Loading the ${level}-step questions…</p>`;
+  const d = await loadShard(level);
+  if (!d){
+    $('ceildrill').innerHTML = `<p class="hint">Couldn't load <code>ceiling/level_${
+      String(level).padStart(2,'0')}.json</code> — run <code>python -m eval.ceiling_sweep --run</code>.</p>`;
+    return;
+  }
+  const c = ceilCounts(cond, level);
+  const head = `<tr><th class="q">Question (${level} steps)</th><th>Answer</th>` +
+    d.models.map(m => `<th>${esc(m.label.replace(/ \(.*\)$/, ''))}</th>`).join('') + '</tr>';
+  const rows = d.items.map((it, i) => {
+    const cells = d.models.map(m => {
+      const cell = it.cells[cond][m.key];
+      return `<td>${badge(cell.bucket)}${cell.truncated ? '<span class="chip">hit token cap</span>' : ''}
+        <div class="ans" onclick="ceilFull(${level},${i},'${cond}','${m.key}',this)"
+             title="click to expand">${esc(cell.text.slice(0, 300))}${cell.text.length > 300 ? ' …' : ''}</div></td>`;
+    }).join('');
+    return `<tr><td class="q">${esc(it.question)}</td><td class="canon">${esc(it.answer)}</td>${cells}</tr>`;
+  }).join('');
+  $('ceildrill').innerHTML =
+    `<h3 style="margin:1.2rem 0 .2rem">${level} steps · <span style="color:${CEIL_COLORS[cond]}">${esc(cond)}</span></h3>
+     <p class="hint" style="margin-top:0">${d.items.length} questions × ${d.models.length} models =
+       ${c.n} responses · correct ${c.correct||0} · wrong ${c.wrong||0} · unparseable ${c.unparseable||0}.
+       Click any response to expand it.</p>
+     <table class="rows"><thead>${head}</thead><tbody>${rows}</tbody></table>`;
+  $('ceildrill').scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+function ceilFull(level, i, cond, mk, el){
+  el.textContent = CEIL_SHARDS[level].items[i].cells[cond][mk].text;
+  el.style.maxHeight = 'none';
+  el.onclick = null;
+}
+
+function renderCeiling(c){
+  CEIL = c;
+  const L = c.levels, conds = c.conditions, W = 660, H = 300, pad = 46;
+  const X = s => pad + (s - L[0]) / (L[L.length-1] - L[0]) * (W - 2*pad);
+  const Y = a => H - pad - a * (H - 2*pad);
+  let g = '';
+  for (const a of [0,0.25,0.5,0.75,1]){
+    g += `<line x1="${pad}" y1="${Y(a).toFixed(0)}" x2="${W-pad}" y2="${Y(a).toFixed(0)}" stroke="#e6e8ec"/>`
+       + `<text x="${pad-8}" y="${(Y(a)+4).toFixed(0)}" text-anchor="end" font-size="11" fill="#999">${a*100}%</text>`;
+  }
+  for (const s of L) g += `<text x="${X(s).toFixed(0)}" y="${H-pad+18}" text-anchor="middle" font-size="11" fill="#999">${s}</text>`;
+  g += `<text x="${(W/2).toFixed(0)}" y="${H-8}" text-anchor="middle" font-size="12" fill="#666">reasoning steps</text>`;
+  for (const cond of conds){
+    const col = CEIL_COLORS[cond] || '#666';
+    const dash = cond === 'json' ? ' stroke-dasharray="6 4"' : '';
+    const pts = L.map(s => `${X(s).toFixed(0)},${Y(c.curve[cond][s]).toFixed(0)}`).join(' ');
+    g += `<polyline points="${pts}" fill="none" stroke="${col}" stroke-width="2.5"${dash}/>`;
+    for (const s of L){
+      const x = X(s).toFixed(0), y = Y(c.curve[cond][s]).toFixed(0);
+      const sel = CEIL_SEL && CEIL_SEL.level === s && CEIL_SEL.cond === cond;
+      const k = ceilCounts(cond, s);
+      if (sel) g += `<circle cx="${x}" cy="${y}" r="8" fill="none" stroke="${col}" stroke-width="2"/>`;
+      g += `<circle cx="${x}" cy="${y}" r="${sel ? 5 : 3.5}" fill="${col}"/>`
+         + `<circle cx="${x}" cy="${y}" r="13" fill="transparent" style="cursor:pointer"
+              onclick="ceilDrill(${s},'${cond}')"><title>${cond} · ${s} steps · ${
+              Math.round(100*c.curve[cond][s])}% correct (n=${k.n} responses) — click to read them</title></circle>`;
+    }
+  }
+  const legend = conds.map(cond =>
+    `<span style="display:flex;align-items:center;gap:6px"><span style="width:18px;border-top:2px ${cond==='json'?'dashed':'solid'} ${CEIL_COLORS[cond]||'#666'}"></span>${esc(cond)}</span>`).join('');
+  $('ceiling').innerHTML =
+    `<div class="legend" style="margin-bottom:6px">${legend}</div>
+     <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto" role="img"
+       aria-label="Accuracy versus reasoning steps: prose stays high, answer-only json sits near zero, strict_schema decays with depth."></svg>`.replace('></svg>', `>${g}</svg>`) +
+    `<p class="hint"><b>Click any point</b> to read the actual questions and answers behind it.
+     ${c.per_level} questions per level × ${c.models.length} models = ${c.per_level * c.models.length}
+     responses per point. <b>json</b> is flat on the floor — with no scratchpad you're capped at ~1–2
+     effective steps. <b>prose</b> holds high (only the 8B bends). <b>strict_schema</b> starts high and
+     <b>decays with depth</b> — a reasoning field is not a scratchpad.</p>`;
+  $('ceilingcard').style.display = '';
+}
+
 // ---------- Live panel ----------
 async function runLive(){
   const question = $('q').value.trim();
@@ -313,6 +428,8 @@ function renderLive(data){
 
 // ---------- boot ----------
 (async () => {
+  const ceil = await loadCeiling();   // depth sweep renders independently of results.json
+  if (ceil) renderCeiling(ceil);
   RESULTS = await loadResults();
   if (!RESULTS){
     $('banner').innerHTML = `<div class="banner">No <code>results.json</code> yet — run

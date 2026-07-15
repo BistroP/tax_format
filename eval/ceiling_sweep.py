@@ -11,33 +11,19 @@ otherwise the "ceiling" is just a token limit, not a reasoning limit.
 """
 from __future__ import annotations
 
+import collections
 import json
 import random
 import sys
 
 from . import config, scorer
+from .numwords import variants
 
 LEVELS = [8, 12, 16, 20, 28, 40]
-PER_LEVEL = 12
+PER_LEVEL = 100
 CONDITIONS = ["prose", "json", "strict_schema"]
 MAX_TOKENS = 4096
 SEED = 20260708
-
-ONES = ["zero","one","two","three","four","five","six","seven","eight","nine","ten",
-        "eleven","twelve","thirteen","fourteen","fifteen","sixteen","seventeen","eighteen","nineteen"]
-TENS = ["","","twenty","thirty","forty","fifty","sixty","seventy","eighty","ninety"]
-def _two(n):
-    if n < 20: return [ONES[n]]
-    t = TENS[n//10]
-    return [t] if n % 10 == 0 else [f"{t}-{ONES[n%10]}", f"{t} {ONES[n%10]}"]
-def _three(n):
-    if n < 100: return _two(n)
-    h = ONES[n//100] + " hundred"; rem = n % 100
-    if rem == 0: return [h]
-    out = []
-    for r in _two(rem): out += [f"{h} {r}", f"{h} and {r}"]
-    return out
-def variants(n): return sorted(set(_three(n)))
 
 PHRASE = {"add": lambda k: f"add {k}", "sub": lambda k: f"subtract {k}",
           "mul": lambda k: f"multiply by {k}", "div": lambda k: f"divide by {k}"}
@@ -64,35 +50,52 @@ def question(start, ops):
     return f"Start with the number {start}. {body[0].upper() + body[1:]}. What is the result?"
 
 def build_items():
-    rng = random.Random(SEED)
+    # One RNG *per level* (not one for the whole sweep) so each level's stream is
+    # independent: raising PER_LEVEL appends new items instead of reshuffling the
+    # existing ones out from under their ids (which would strand the cache).
     items = []
     for level in LEVELS:
+        rng = random.Random(SEED + level)
         for i in range(PER_LEVEL):
             start, ops, ans = gen_one(level, rng)
-            items.append({"id": f"deep{level:02d}_{i:02d}", "question": question(start, ops),
+            items.append({"id": f"deep{level:02d}_{i:03d}", "question": question(start, ops),
                           "canonical_answer": str(ans), "acceptable_variants": variants(ans),
                           "category": f"ms_{level}step", "banned_word": str(ans), "_steps": level})
     return items
 
 def _pct(x): return f"{100*x:5.0f}%"
 
+def _clip(text, n=4000):
+    """Keep the drill-down files a sane size; a runaway repeat-loop response can be huge."""
+    text = text or ""
+    return text if len(text) <= n else text[:n] + f"\n… [clipped {len(text) - n} chars]"
+
 def run():
     from . import harness
     items = build_items()
     print(f"Sweep: {len(items)} items · levels {LEVELS} · {len(config.MODELS)} models · "
           f"conditions {CONDITIONS} · max_tokens {MAX_TOKENS}")
-    harness.prefetch(config.MODELS, items, CONDITIONS, max_tokens=MAX_TOKENS)
+    harness.prefetch(config.MODELS, items, CONDITIONS, max_workers=16, max_tokens=MAX_TOKENS)
 
     # acc[cond][level] = list of 0/1 across (model,item); accm[cond][level][model_key] too
     acc = {c: {L: [] for L in LEVELS} for c in CONDITIONS}
     accm = {c: {L: {m["key"]: [] for m in config.MODELS} for L in LEVELS} for c in CONDITIONS}
+    buckets = {c: {L: collections.Counter() for L in LEVELS} for c in CONDITIONS}
+    detail = {L: [] for L in LEVELS}  # per-level drill-down payload (one file per level)
     for it in items:
         L = it["_steps"]
+        cells = {c: {} for c in CONDITIONS}
         for m in config.MODELS:
             for c in CONDITIONS:
                 rec = harness.query(m, it, c, max_tokens=MAX_TOKENS)
-                hit = 1 if scorer.score(rec["text"], c, it) == "correct" else 0
+                bucket = scorer.score(rec["text"], c, it)
+                hit = 1 if bucket == "correct" else 0
                 acc[c][L].append(hit); accm[c][L][m["key"]].append(hit)
+                buckets[c][L][bucket] += 1
+                cells[c][m["key"]] = {"bucket": bucket, "text": _clip(rec["text"]),
+                                      "truncated": rec.get("stop_reason") == "length"}
+        detail[L].append({"id": it["id"], "question": it["question"],
+                          "answer": it["canonical_answer"], "cells": cells})
 
     def rate(lst): return sum(lst) / len(lst) if lst else 0.0
     curve = {c: {L: rate(acc[c][L]) for L in LEVELS} for c in CONDITIONS}
@@ -108,11 +111,23 @@ def run():
         print(f"{L:4}   " + "  ".join(f"{_pct(rate(accm['prose'][L][m['key']])):>8}" for m in config.MODELS))
 
     out = {"levels": LEVELS, "per_level": PER_LEVEL, "conditions": CONDITIONS,
-           "models": [m["key"] for m in config.MODELS], "curve": curve,
+           "models": [{"key": m["key"], "label": m["label"]} for m in config.MODELS],
+           "curve": curve,
+           "buckets": {c: {L: dict(buckets[c][L]) for L in LEVELS} for c in CONDITIONS},
            "prose_by_model": {L: {m["key"]: rate(accm["prose"][L][m["key"]]) for m in config.MODELS} for L in LEVELS}}
     (config.ROOT / "ceiling.json").write_text(json.dumps(out, indent=2))
     _write_chart(curve)
-    print(f"\nWrote ceiling.json + ceiling.html")
+
+    # Per-level drill-down, one file each so the explorer can lazy-load on click
+    # instead of shipping every response up front.
+    ddir = config.ROOT / "ceiling"
+    ddir.mkdir(exist_ok=True)
+    for L in LEVELS:
+        (ddir / f"level_{L:02d}.json").write_text(json.dumps(
+            {"level": L, "per_level": PER_LEVEL, "conditions": CONDITIONS,
+             "models": [{"key": m["key"], "label": m["label"]} for m in config.MODELS],
+             "items": detail[L]}, ensure_ascii=False))
+    print(f"\nWrote ceiling.json + ceiling.html + ceiling/level_*.json ({len(LEVELS)} files)")
 
 def _write_chart(curve):
     W, H, pad = 720, 420, 60
@@ -144,9 +159,9 @@ def _write_chart(curve):
         f"<!doctype html><meta charset=utf-8><title>Reasoning ceiling</title>{svg}")
 
 def dry():
-    rng = random.Random(SEED)
     print("Dry run — generating + validating (no API):")
     for level in LEVELS:
+        rng = random.Random(SEED + level)  # same stream build_items() uses
         start, ops, ans = gen_one(level, rng)
         # independent recompute
         v = start

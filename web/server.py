@@ -40,6 +40,27 @@ def results():
     )
 
 
+@app.get("/ceiling.json")
+def ceiling():
+    path = config.ROOT / "ceiling.json"
+    if path.exists():
+        return FileResponse(path, media_type="application/json")
+    return JSONResponse(
+        {"error": "ceiling.json not found — run `python -m eval.ceiling_sweep --run` first."},
+        status_code=404,
+    )
+
+
+@app.get("/ceiling/level_{level}.json")
+def ceiling_level(level: int):
+    """Per-depth drill-down: the questions + every model's response at that level.
+    `level: int` is the path guard — it makes a traversal path un-routable."""
+    path = config.ROOT / "ceiling" / f"level_{level:02d}.json"
+    if path.exists():
+        return FileResponse(path, media_type="application/json")
+    return JSONResponse({"error": f"no sweep data for {level} steps"}, status_code=404)
+
+
 class LiveRequest(BaseModel):
     question: str
     expected: Optional[str] = None

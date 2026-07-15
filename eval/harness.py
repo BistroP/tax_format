@@ -62,6 +62,24 @@ def _cache_path(model_key: str, item_id: str, condition: str):
     return config.CACHE / f"{model_key}__{item_id}__{condition}.json"
 
 
+def _cached(model_key: str, item_id: str, condition: str, prompt: str) -> Optional[dict]:
+    """Return the cached record only if *this exact prompt* produced it.
+
+    The file is keyed by (model, item, condition), but an item's text can change
+    under a stable id — bumping the sweep's PER_LEVEL reshuffles the generator, so
+    `deep12_00` keeps its id and gets a new question. Comparing the stored prompt
+    turns a silent stale hit into a plain miss.
+    """
+    path = _cache_path(model_key, item_id, condition)
+    if not path.exists():
+        return None
+    try:
+        rec = json.loads(path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return None
+    return rec if rec.get("prompt") == prompt else None
+
+
 def _is_transient_provider_error(msg: str) -> bool:
     """OpenRouter often surfaces an upstream 429 / provider hiccup as a 400 after
     it fails over between providers. Those are worth retrying; a genuinely
@@ -99,11 +117,12 @@ def query(model_cfg: dict, item: dict, condition: str,
     `write_cache=False` (used by the live panel) keeps ad-hoc questions out of the
     benchmark cache. `max_tokens` overrides the default (e.g. the ceiling sweep
     needs a big budget so long chain-of-thought isn't truncated)."""
-    cpath = _cache_path(model_cfg["key"], item["id"], condition)
-    if use_cache and cpath.exists():
-        return json.loads(cpath.read_text())
-
     prompt = build_prompt(condition, item)
+    if use_cache:
+        hit = _cached(model_cfg["key"], item["id"], condition, prompt)
+        if hit is not None:
+            return hit
+
     kwargs = {
         "model": model_cfg["model"],
         "max_tokens": max_tokens or config.MAX_TOKENS,
@@ -131,7 +150,8 @@ def query(model_cfg: dict, item: dict, condition: str,
         "latency_s": round(time.time() - t0, 2),
     }
     if write_cache:
-        cpath.write_text(json.dumps(record, indent=2, ensure_ascii=False))
+        _cache_path(model_cfg["key"], item["id"], condition).write_text(
+            json.dumps(record, indent=2, ensure_ascii=False))
     if verbose:
         print(f"    [{model_cfg['key']:8}] {item['id']:8} {condition:12} "
               f"({record['latency_s']}s)")
@@ -147,7 +167,7 @@ def prefetch(model_cfgs, items, conditions, max_workers: int = 8,
 
     get_client()  # initialise the singleton before spawning threads
     todo = [(m, it, c) for m in model_cfgs for c in conditions for it in items
-            if not _cache_path(m["key"], it["id"], c).exists()]
+            if _cached(m["key"], it["id"], c, build_prompt(c, it)) is None]
     if not todo:
         return 0
     done = failed = 0

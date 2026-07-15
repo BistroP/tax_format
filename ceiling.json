@@ -7,43 +7,150 @@
     28,
     40
   ],
-  "per_level": 12,
+  "per_level": 100,
   "conditions": [
     "prose",
     "json",
     "strict_schema"
   ],
   "models": [
-    "llama8b",
-    "mistral24b",
-    "gemma27b",
-    "llama70b",
-    "gpt4o"
+    {
+      "key": "llama8b",
+      "label": "Llama 3.1 8B (Meta)"
+    },
+    {
+      "key": "mistral24b",
+      "label": "Mistral Small 24B (Mistral)"
+    },
+    {
+      "key": "gemma27b",
+      "label": "Gemma 3 27B (Google)"
+    },
+    {
+      "key": "llama70b",
+      "label": "Llama 3.3 70B (Meta)"
+    },
+    {
+      "key": "gpt4o",
+      "label": "GPT-4o (OpenAI)"
+    }
   ],
   "curve": {
     "prose": {
-      "8": 1.0,
-      "12": 1.0,
-      "16": 1.0,
-      "20": 0.95,
-      "28": 0.9666666666666667,
-      "40": 0.9
+      "8": 0.998,
+      "12": 0.988,
+      "16": 0.984,
+      "20": 0.972,
+      "28": 0.948,
+      "40": 0.92
     },
     "json": {
-      "8": 0.016666666666666666,
-      "12": 0.016666666666666666,
-      "16": 0.0,
-      "20": 0.0,
-      "28": 0.0,
-      "40": 0.0
+      "8": 0.018,
+      "12": 0.014,
+      "16": 0.012,
+      "20": 0.01,
+      "28": 0.008,
+      "40": 0.008
     },
     "strict_schema": {
-      "8": 0.9166666666666666,
-      "12": 0.95,
-      "16": 0.7166666666666667,
-      "20": 0.75,
-      "28": 0.4,
-      "40": 0.21666666666666667
+      "8": 0.956,
+      "12": 0.928,
+      "16": 0.81,
+      "20": 0.706,
+      "28": 0.418,
+      "40": 0.158
+    }
+  },
+  "buckets": {
+    "prose": {
+      "8": {
+        "correct": 499,
+        "wrong": 1
+      },
+      "12": {
+        "correct": 494,
+        "wrong": 6
+      },
+      "16": {
+        "correct": 492,
+        "wrong": 8
+      },
+      "20": {
+        "correct": 486,
+        "wrong": 14
+      },
+      "28": {
+        "correct": 474,
+        "wrong": 26
+      },
+      "40": {
+        "correct": 460,
+        "wrong": 40
+      }
+    },
+    "json": {
+      "8": {
+        "wrong": 456,
+        "unparseable": 35,
+        "correct": 9
+      },
+      "12": {
+        "wrong": 450,
+        "unparseable": 43,
+        "correct": 7
+      },
+      "16": {
+        "wrong": 474,
+        "correct": 6,
+        "unparseable": 20
+      },
+      "20": {
+        "wrong": 471,
+        "unparseable": 24,
+        "correct": 5
+      },
+      "28": {
+        "wrong": 475,
+        "unparseable": 21,
+        "correct": 4
+      },
+      "40": {
+        "wrong": 472,
+        "unparseable": 24,
+        "correct": 4
+      }
+    },
+    "strict_schema": {
+      "8": {
+        "wrong": 20,
+        "correct": 478,
+        "unparseable": 2
+      },
+      "12": {
+        "correct": 464,
+        "wrong": 35,
+        "unparseable": 1
+      },
+      "16": {
+        "correct": 405,
+        "wrong": 90,
+        "unparseable": 5
+      },
+      "20": {
+        "correct": 353,
+        "wrong": 140,
+        "unparseable": 7
+      },
+      "28": {
+        "correct": 209,
+        "wrong": 286,
+        "unparseable": 5
+      },
+      "40": {
+        "wrong": 404,
+        "unparseable": 17,
+        "correct": 79
+      }
     }
   },
   "prose_by_model": {
@@ -51,42 +158,42 @@
       "llama8b": 1.0,
       "mistral24b": 1.0,
       "gemma27b": 1.0,
-      "llama70b": 1.0,
+      "llama70b": 0.99,
       "gpt4o": 1.0
     },
     "12": {
-      "llama8b": 1.0,
+      "llama8b": 0.96,
       "mistral24b": 1.0,
       "gemma27b": 1.0,
-      "llama70b": 1.0,
-      "gpt4o": 1.0
+      "llama70b": 0.99,
+      "gpt4o": 0.99
     },
     "16": {
-      "llama8b": 1.0,
+      "llama8b": 0.93,
       "mistral24b": 1.0,
       "gemma27b": 1.0,
-      "llama70b": 1.0,
+      "llama70b": 0.99,
       "gpt4o": 1.0
     },
     "20": {
-      "llama8b": 0.8333333333333334,
+      "llama8b": 0.87,
       "mistral24b": 1.0,
       "gemma27b": 1.0,
-      "llama70b": 0.9166666666666666,
+      "llama70b": 0.99,
       "gpt4o": 1.0
     },
     "28": {
-      "llama8b": 0.9166666666666666,
+      "llama8b": 0.79,
       "mistral24b": 1.0,
-      "gemma27b": 1.0,
-      "llama70b": 0.9166666666666666,
+      "gemma27b": 0.99,
+      "llama70b": 0.96,
       "gpt4o": 1.0
     },
     "40": {
-      "llama8b": 0.5,
+      "llama8b": 0.68,
       "mistral24b": 1.0,
-      "gemma27b": 1.0,
-      "llama70b": 1.0,
+      "gemma27b": 0.97,
+      "llama70b": 0.95,
       "gpt4o": 1.0
     }
   }

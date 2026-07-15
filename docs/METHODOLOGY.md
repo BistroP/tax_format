@@ -24,20 +24,39 @@ structured output is ubiquitous in agentic systems, tool/function calling, and A
 
 ---
 
-## 1. The dataset — self-authored, not off the shelf
+## 1. The dataset — mostly self-authored, plus a fetched GSM8K slice
 
-We authored every stimulus. No GSM8K, no MMLU. Five reasons this is deliberate:
+Two sources, deliberately.
 
-1. **Exact, machine-checkable answers.** Every item resolves to one short token — a
-   name, a year, a number — so grading is a token match, not fuzzy prose comparison.
-2. **Guaranteed-correct answer keys.** Multi-step answers are *computed from* the
-   problem (§1.3), so the key cannot be wrong. Scraped datasets carry label noise.
-3. **A controlled difficulty ladder.** We need items from trivial to straining,
-   otherwise held constant — you can't get a clean 4→40-step depth axis from a fixed
-   benchmark.
-4. **Answer length held ~constant**, so the format-overhead signal isn't confounded
-   by answer length (harder items must not have longer answers).
-5. **Format-neutral question text**, identical across all conditions.
+**Self-authored (350 items).** The justification is *the depth axis, and nothing else*:
+
+1. **A controlled depth ladder.** The experiment is accuracy vs *reasoning depth* —
+   4 → 40 sequential steps with everything else held constant. No fixed benchmark
+   carries that axis; GSM8K problems are ~2–8 steps and aren't labelled by depth.
+2. **Answer length held ~constant** (1–3 chars) at every rung, so the format signal
+   isn't confounded by answer length — harder items must not have longer answers.
+3. **Computed answer keys.** Multi-step answers are computed from the op chain (§1.3),
+   then independently re-derived from the question *text* by `verify_stimuli`
+   (291 items re-verified, 0 mismatches).
+4. **Format-neutral question text**, identical across all conditions.
+
+**Fetched (100 items, GSM8K).** The external control: our own chains can't be their
+own check. [eval/make_gsm8k.py](../eval/make_gsm8k.py) pulls the official
+[grade-school-math](https://github.com/openai/grade-school-math) test split (1,319
+problems) and parses the `#### N` gold labels programmatically. Item ids carry the
+source line — `gsm_0123` is line 123 of `test.jsonl` — so any item is traceable back
+to the dataset. Two declared filters: answers restricted to **0–999** (preserves the
+answer-length control above; costs 10% of the pool and incidentally removes every
+comma-formatted label, which the scorer would fail to match against a canonical
+`1000`), then the usual pilot gate (§5).
+
+> **A retracted argument, kept visible.** An earlier draft justified self-authoring by
+> claiming that a scraped dataset makes you "inherit its label errors." That is
+> backwards, and we're not going to quietly delete it: GSM8K's labels are vetted and
+> ours are not, so hand-authoring **adds** label risk rather than removing it. It also
+> described the GSM8K slice as "externally vetted" while the items were in fact
+> hand-transcribed by us — the claim leaned on our typing. Both are fixed above: the
+> slice is now fetched, and the only defensible reason to self-author is the depth axis.
 
 ### 1.1 Item schema
 
@@ -62,18 +81,30 @@ Every stimulus is one object with six fields ([data/stimuli.json](../data/stimul
 - `category` — the ladder rung.
 - `banned_word` — the token the `lexical` condition forbids (set to the answer).
 
-### 1.2 The ladder (main set: 110 items, 106 kept after the pilot gate)
+### 1.2 The ladder (main set: 450 items)
 
-| category | n | tests |
-|---|---|---|
-| `factual_recall` | 20 | capitals, elements, authors, dates — pure lookup, no reasoning |
-| `arithmetic` | 10 | one-step (`"7 × 8?"`) |
-| `word_problem` | 10 | one-step, framed in words |
-| `two_hop` | 10 | two chained facts ("language of the 2016 Olympics host?") |
-| `ms_4step` / `ms_5step` / `ms_6step` | 20 each | multi-step arithmetic chains |
+| category | n | source | tests |
+|---|---|---|---|
+| `factual_recall` | 20 | authored | capitals, elements, authors, dates — pure lookup, no reasoning |
+| `arithmetic` | 10 | authored | one-step (`"7 × 8?"`) |
+| `word_problem` | 10 | authored | one-step, framed in words |
+| `two_hop` | 10 | authored | two chained facts ("language of the 2016 Olympics host?") |
+| `ms_4step` / `ms_5step` / `ms_6step` | 100 each | authored | multi-step arithmetic chains |
+| `gsm8k` | 100 | **fetched** | real grade-school word problems, gold labels |
 
-A separate **72-item ceiling set** (8/12/16/20/28/40-step, 12 each) is used only for
-the depth sweep (§8).
+The first 50 items are the easy band, and they earn their place by showing ~0 tax —
+they're the evidence the instrument doesn't manufacture an effect. The 300 `ms_` items
+carry the main result; the 100 GSM8K items are the external control.
+
+Each `ms_` level is 50 hand-authored items topped up to 100 by
+[eval/make_multistep.py](../eval/make_multistep.py). The authored items are ~86% bare
+(`"Start with the number N…"`) and ~14% narrative (`"A theatre starts with 120 seats
+booked…"`); the generator emits only the bare form, so each level sits at ~93% bare.
+That surface-form shift is worth knowing, but it can't touch the tax, which is a
+*within-item* prose-vs-constraint difference — every condition sees the same items.
+
+A separate **600-item ceiling set** (8/12/16/20/28/40-step, 100 each) is used only for
+the depth sweep (§8), ungated.
 
 ### 1.3 Computed answers (multi-step)
 
@@ -163,15 +194,24 @@ Four settings matter for rigor:
 - **`max_tokens`.** 512 for the main run; **4096 for the depth sweep**, because a
   40-step solution written longhand is ~1,000 tokens and a 512 cap would *truncate*
   the reasoning and produce a fake ceiling. `stop_reason` is checked afterward to
-  confirm non-truncation (only 2/60 responses hit the cap at 40 steps).
-- **On-disk caching**, keyed by `(model, item_id, condition)`. Payoffs: the run is
-  reproducible; re-running is nearly free; and **re-scoring cached text after a
-  scorer change costs zero API calls**. A parallel `prefetch()` (thread pool) warms
-  the cache so a ~1,000-call run finishes in minutes. Transient OpenRouter failures
-  (a 429 wrapped as a provider 400 after fail-over) are retried; genuine bad requests
-  are not.
+  confirm non-truncation (at 40 steps: 6/500 prose and 14/500 strict_schema hit the
+  cap — against 404 that are simply *wrong*, so the ceiling is reasoning, not tokens).
+- **On-disk caching**, keyed by `(model, item_id, condition)` **and validated against
+  the stored prompt**. Payoffs: the run is reproducible; re-running is nearly free; and
+  **re-scoring cached text after a scorer change costs zero API calls**. A parallel
+  `prefetch()` (thread pool) warms the cache so a ~9,000-call sweep finishes in ~20
+  minutes. Transient OpenRouter failures (a 429 wrapped as a provider 400 after
+  fail-over) are retried; genuine bad requests are not.
 
-Each cached record stores `text`, `stop_reason`, and `latency_s`.
+Each cached record stores `prompt`, `text`, `stop_reason`, and `latency_s`.
+
+> **Why the prompt check exists.** The id is not the question. Raising the sweep's
+> `PER_LEVEL` reshuffles the generator's stream, so `deep12_00` keeps its id and gets a
+> *different question* — and an id-keyed cache would hand back the old answer for the
+> new question, silently, with no error anywhere. `query()` therefore builds the prompt
+> *before* the lookup and treats a prompt mismatch as a plain miss. Content-addressing
+> the cache is what makes "just bump n" a safe operation rather than a data-corruption
+> bug. (The per-level RNG in §8 attacks the same problem from the other end.)
 
 ---
 
@@ -369,8 +409,12 @@ The explorer has three layers:
    the **same harness and scorer** as the offline pipeline → a real-time grid. A dead
    key degrades to an inline error chip.
 
-Plus the **depth curve** (`ceiling.html`) — accuracy vs. n-step for prose / json /
-strict_schema (§8).
+4. **The depth curve** — accuracy vs. n-step for prose / json / strict_schema (§8),
+   in the explorer and as a standalone `ceiling.html`. **Every point is clickable**:
+   it lazy-loads `ceiling/level_NN.json` and lists all 100 questions at that depth with
+   each of the 5 models' responses, bucket-tagged, click-to-expand. Shipping all six
+   levels up front would be ~5MB for a chart most visitors only glance at, so the
+   per-level files are fetched on demand.
 
 Design invariant: every visual is a **view over `results.json`** (or `ceiling.json`);
 the front-end never computes anything the scorer didn't already decide.
@@ -387,27 +431,83 @@ axes** instead of one:
   chain-of-thought itself fails.
 
 Design differences from the main run:
-- **Depths 8 / 12 / 16 / 20 / 28 / 40** (12 items each), generated the same way (§1.3).
+- **Depths 8 / 12 / 16 / 20 / 28 / 40** (100 items each = 600 items), generated the
+  same way (§1.3). Each level draws from its own seeded RNG (`SEED + level`) so raising
+  `PER_LEVEL` *appends* items instead of reshuffling existing ids.
 - **Ungated** — no pilot filter; failures are the point.
 - **`max_tokens = 4096`** so long reasoning isn't truncated (the critical control —
   otherwise the "ceiling" is a token limit).
 - Conditions: `prose`, `json`, `strict_schema`.
 
-Findings (averaged over the five models):
-- `json` is a **floor** — ~0% past 8 steps (no scratchpad → ~1–2 effective steps).
-- `prose` is a **high, model-stratified ceiling** — 4 of 5 models hold ~100% to 40
-  steps; only Llama 8B clearly bends (100% → 50% by 40). The frontier ceiling is past
-  40 for these bounded chains.
-- `strict_schema` **decays with depth** — ~92% at 8 steps → ~22% at 40 — and it is
-  *genuine reasoning failure* (at 40 steps: 45/60 `wrong` with valid JSON, only 1–2
-  truncated, avg 646 chars, far below the 4096-token cap). The same GPT-4o that writes
-  ~1,900 chars of working in prose emits a ~198-char reasoning field under the schema
-  and answers wrong.
+Each point is 100 questions × 5 models = **500 responses**.
 
-The novel claim: the format tax is **not a fixed penalty but a depth-dependent one** —
-structured output progressively starves reasoning as problems deepen, even when a
-reasoning field is nominally provided. This goes past "reasoning recovers the loss"
-(Tam) to "the recovery itself has a depth limit."
+| steps | `prose` | `json` | `strict_schema` |
+|---|---|---|---|
+| 8 | 100% | 2% | 96% |
+| 12 | 99% | 1% | 93% |
+| 16 | 98% | 1% | 81% |
+| 20 | 97% | 1% | 71% |
+| 28 | 95% | 1% | 42% |
+| 40 | 92% | 1% | **16%** |
+
+- `json` is a **floor** — ~1% throughout (no scratchpad → ~1–2 effective steps).
+- `prose` is a **high, model-stratified ceiling** — GPT-4o and Mistral 24B hold 100% at
+  40 steps, Gemma 97%, Llama 70B 95%; only Llama 8B clearly bends (100% → 68%). The
+  frontier ceiling is past 40 for these bounded chains.
+- `strict_schema` **decays with depth**, 96% → 16%, and the decay is *genuine reasoning
+  failure*: at 40 steps it's 404 `wrong` vs 17 `unparseable` (valid JSON, filled-in
+  reasoning field, wrong answer), with only 14/500 hitting the token cap.
+
+### 8.1 The mechanism: a `reasoning` field is not a scratchpad
+
+Measuring how much reasoning each format actually *elicits* (median chars — for `prose`
+the whole response, for `strict_schema` the contents of its reasoning field):
+
+| steps | prose | strict reasoning field | ratio | prose acc | strict acc |
+|---|---|---|---|---|---|
+| 8 | 362 | 212 | 0.58 | 100% | 96% |
+| 16 | 702 | 285 | 0.41 | 98% | 81% |
+| 20 | 853 | 338 | 0.40 | 97% | 71% |
+| 28 | 1178 | 197 | 0.17 | 95% | 42% |
+| 40 | 1658 | **106** | **0.06** | 92% | **16%** |
+
+In prose, reasoning **scales with the problem** — 362 → 1,658 chars as depth grows 8 →
+40. Under the schema it grows to 338 chars at 20 steps and then **collapses to 106** —
+*less* reasoning for a *harder* problem — and accuracy tracks it exactly. The field
+stops behaving like a scratchpad and starts behaving like a **budget**: the model fills
+it with a token gesture and commits to an answer it hasn't worked out.
+
+The clearest single artifact in the project — GPT-4o, same 40-step question
+(`deep40_000`, gold answer **51**), the two formats side by side:
+
+**`prose` → correct.** 1,701 chars; every step numbered and evaluated:
+
+```
+1. Start with **88**.
+2. Divide by 2: \( 88 \div 2 = 44 \).
+3. Subtract 21: \( 44 - 21 = 23 \).
+   … all 40 steps … → 51
+```
+
+**`strict_schema` → wrong.** 179 chars, the entire response:
+
+```json
+{"result": {"reasoning": "The operations were performed step by step as described in
+the question, ensuring accuracy at each step.", "answer": "105", "confidence": 1}}
+```
+
+The reasoning field contains a *description of having reasoned* and not one digit of
+arithmetic. The model asserts the process it did not perform, answers 105, and reports
+`confidence: 1`. This is what the 0.06 ratio in the table looks like from the inside —
+and it's why the failure lands in `wrong` rather than `unparseable`: the JSON is
+flawless. A validator would pass this response. Every schema-conformance metric in the
+industry would call it a success.
+
+The novel claim: the format tax is **not a fixed penalty but a depth-dependent one**.
+"Add a `reasoning` field" genuinely recovers the tax at 4–6 steps (§6) — which is why
+it's standard advice — and then **silently stops working** as depth grows. This goes
+past "reasoning recovers the loss" (Tam) to "the recovery itself has a depth limit,"
+and past "capacity competition" (Fan) by measuring the capacity the format concedes.
 
 ---
 
@@ -428,26 +528,34 @@ reasoning field is nominally provided. This goes past "reasoning recovers the lo
 - **`lexical` correctness is compliance-confounded** — banning the answer word means a
   compliant reply omits the only string the scorer can match, so read `lexical` as a
   compliance signal (violation rate), not a reasoning tax.
-- **n = 12–20 per cell** — demo-grade error bars, not publication-grade.
 - **Bounded 2–3-digit arithmetic** — isolates *depth* (per-step math is easy), but
   doesn't test hard per-step computation.
 - **The strong-model prose ceiling is not located** — it is beyond 40 steps.
+- **One prompt per condition** — the tax is measured against *our* phrasing of "answer
+  in JSON"; we don't sweep prompt variants, so some of the effect may be promptable.
+- **GSM8K answers filtered to 0–999** (§1) to hold answer length constant — that's 90%
+  of the split, but it is a declared deviation from "GSM8K" as published.
+- **`ms_` levels mix authored and generated phrasings** (~93% bare / ~7% narrative).
 
 ---
 
 ## Appendix — file map
 
 ```
-data/stimuli.json          the 110-item stimulus set (self-authored)
-data/piloted_stimuli.json  the 106 that passed the prose gate
+data/stimuli.json          the 450-item stimulus set (350 authored + 100 fetched GSM8K)
+data/piloted_stimuli.json  those that passed the prose gate
 eval/config.py             models, conditions, settings (temperature, max_tokens, "reasoning off")
 eval/conditions.py         the four prompt templates
-eval/harness.py            OpenRouter calls, caching, retry, parallel prefetch
+eval/harness.py            OpenRouter calls, prompt-checked caching, retry, parallel prefetch
 eval/scorer.py             the three-bucket scorer + compliance flags
+eval/numwords.py           integer -> word spellings (acceptable_variants)
+eval/make_gsm8k.py         fetch the official GSM8K test split -> the gsm8k slice
+eval/make_multistep.py     top the ms_4/5/6step levels up to n=100
+eval/verify_stimuli.py     re-derive every arithmetic answer from its question text
 eval/pilot.py              the prose gate
 eval/run_eval.py           run + score + aggregate -> results.json
 eval/make_heatmap.py       static heatmap.html
-eval/ceiling_sweep.py      the ungated depth sweep -> ceiling.json + ceiling.html
+eval/ceiling_sweep.py      the ungated depth sweep -> ceiling.json + ceiling/level_*.json
 eval/list_models.py        browse/verify OpenRouter model slugs
 tests/test_scorer.py       offline scorer unit tests (no API key)
 web/index.html             the interactive explorer
