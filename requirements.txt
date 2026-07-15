@@ -1,0 +1,5 @@
+openai>=1.40          # used as the client for OpenRouter (OpenAI-compatible API)
+python-dotenv>=1.0
+# Backend for the interactive explorer / live panel (stretch, Steps 6+8):
+fastapi>=0.110
+uvicorn[standard]>=0.29

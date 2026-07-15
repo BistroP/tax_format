@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Format-Tax Explorer</title>
+<style>
+  :root {
+    --ink: #16181d; --muted: #6b7280; --line: #e6e8ec; --bg: #f7f8fa;
+    --card: #ffffff; --accent: #2563eb;
+    --correct: #157f4b; --wrong: #c2710f; --unparseable: #6d3fb0;
+    --correct-bg: #e7f4ec; --wrong-bg: #fbeedd; --unparseable-bg: #efe8f9;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 2rem 1.2rem 4rem; }
+  h1 { font-size: 1.6rem; margin: 0 0 .3rem; letter-spacing: -0.01em; }
+  .tagline { color: var(--muted); margin: 0 0 .2rem; }
+  .frame { font-size: .9rem; color: var(--muted); background: #eef1f6;
+           border-radius: 8px; padding: .5rem .7rem; margin: .8rem 0 1.6rem; }
+  .frame b { color: var(--ink); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+          padding: 1.1rem 1.2rem; margin-bottom: 1.4rem; }
+  h2 { font-size: 1.05rem; margin: 0 0 .2rem; }
+  .sub { color: var(--muted); font-size: .88rem; margin: 0 0 1rem; }
+  .meta { color: var(--muted); font-size: .82rem; margin-top: .6rem; }
+
+  /* Heatmap */
+  table.hm { border-collapse: separate; border-spacing: 6px; width: 100%; }
+  table.hm th { font-size: .72rem; text-transform: uppercase; letter-spacing: .04em;
+                color: var(--muted); font-weight: 600; text-align: center; padding-bottom: 2px; }
+  td.mlabel { text-align: right; font-weight: 600; white-space: nowrap; width: 190px; }
+  td.mlabel .slug { display: block; font-weight: 400; color: #a2a8b3; font-size: .74rem; }
+  td.cell { color: #fff; text-align: center; border-radius: 9px; padding: 9px 6px;
+            min-width: 108px; cursor: pointer; transition: transform .08s, box-shadow .08s;
+            border: 2px solid transparent; }
+  td.cell:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,.16); }
+  td.cell.sel { border-color: #111; box-shadow: 0 0 0 2px #fff, 0 0 0 4px #111; }
+  td.cell.base { background: #48566a; }
+  .big { font-size: 1.45rem; font-weight: 700; line-height: 1.1; }
+  .tax { font-size: .82rem; opacity: .95; }
+  .lab { font-size: .68rem; opacity: .9; margin-top: 2px; }
+  .hint { color: var(--muted); font-size: .85rem; margin-top: .8rem; }
+
+  /* Badges + chips */
+  .badge { display: inline-block; font-size: .72rem; font-weight: 700; padding: 1px 7px;
+           border-radius: 999px; text-transform: uppercase; letter-spacing: .03em; }
+  .badge.correct { color: var(--correct); background: var(--correct-bg); }
+  .badge.wrong { color: var(--wrong); background: var(--wrong-bg); }
+  .badge.unparseable { color: var(--unparseable); background: var(--unparseable-bg);
+                       outline: 1.5px dashed var(--unparseable); outline-offset: -1.5px; }
+  .chip { display: inline-block; font-size: .72rem; padding: 1px 7px; border-radius: 6px;
+          background: #eef1f6; color: var(--muted); }
+  .chip.ok { background: var(--correct-bg); color: var(--correct); }
+  .chip.no { background: var(--unparseable-bg); color: var(--unparseable); }
+  .chip.err { background: #fdecec; color: #b3261e; }
+  .legend { display: flex; gap: 1rem; flex-wrap: wrap; font-size: .82rem; color: var(--muted);
+            margin: .2rem 0 1rem; }
+
+  /* Drill + live tables */
+  table.rows { width: 100%; border-collapse: collapse; }
+  table.rows th { text-align: left; font-size: .74rem; text-transform: uppercase;
+                  letter-spacing: .03em; color: var(--muted); border-bottom: 1px solid var(--line);
+                  padding: 6px 8px; }
+  table.rows td { border-bottom: 1px solid #f0f2f5; padding: 8px; vertical-align: top; font-size: .9rem; }
+  tr.taxed { background: #fff8f0; }
+  .ans { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .82rem;
+         white-space: pre-wrap; word-break: break-word; max-height: 6.5em; overflow: auto;
+         background: #f6f7f9; border-radius: 6px; padding: 4px 7px; margin-top: 4px; }
+  .canon { font-weight: 600; }
+  .q { max-width: 320px; }
+
+  /* Live panel */
+  .liveform { display: grid; grid-template-columns: 1fr; gap: .7rem; }
+  .liveform label { font-size: .8rem; color: var(--muted); font-weight: 600; display: block; margin-bottom: 3px; }
+  .liveform textarea, .liveform input { width: 100%; font: inherit; padding: .5rem .6rem;
+        border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+  .liveform textarea { min-height: 60px; resize: vertical; }
+  .row2 { display: grid; grid-template-columns: 1fr auto; gap: .7rem; align-items: end; }
+  button { font: inherit; font-weight: 600; color: #fff; background: var(--accent); border: 0;
+           border-radius: 8px; padding: .55rem 1.1rem; cursor: pointer; white-space: nowrap; }
+  button:disabled { opacity: .55; cursor: default; }
+  .live-grid { display: grid; gap: 8px; margin-top: 1rem; }
+  .live-cell { border: 1px solid var(--line); border-radius: 9px; padding: 8px 10px; }
+  .live-cell h4 { margin: 0 0 4px; font-size: .82rem; }
+  .banner { padding: .7rem .9rem; border-radius: 8px; background: #fff7ed;
+            border: 1px solid #fed7aa; color: #9a3412; font-size: .88rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Format-Tax Explorer</h1>
+  <p class="tagline">Watch a model answer correctly in prose, then fail the <i>identical</i>
+     question under a format constraint.</p>
+  <div class="frame">
+    <b>The finding is not ours.</b> Format restrictions degrade reasoning — established by
+    Tam et al. (2024), mechanistically <i>capacity competition</i> (Fan 2026). What's here is
+    the <b>instrument</b>, an <b>independent multi-vendor replication</b>, and a <b>scorer</b>
+    that tells “the model was wrong” apart from “I couldn't parse it.”
+  </div>
+
+  <!-- ============ EXPLORER (spine) ============ -->
+  <div class="card">
+    <h2>The tax, by model × condition</h2>
+    <p class="sub">Cell = accuracy under that condition · color = the tax (green none → red heavy).
+       Click any cell to drill into the actual questions and answers.</p>
+    <div id="banner"></div>
+    <div id="filterrow" style="margin:.2rem 0 1rem"></div>
+    <div id="heatmap"></div>
+    <div id="hmmeta" class="meta"></div>
+  </div>
+
+  <div class="card" id="drillcard" style="display:none">
+    <h2 id="drilltitle">Drill-down</h2>
+    <div class="legend">
+      <span><span class="badge correct">correct</span> reasoned right</span>
+      <span><span class="badge wrong">wrong</span> reasoned wrong</span>
+      <span><span class="badge unparseable">unparseable</span> couldn't parse — <b>not</b> counted as wrong</span>
+    </div>
+    <div id="drill"></div>
+  </div>
+
+  <!-- ============ LIVE PANEL (stretch) ============ -->
+  <div class="card">
+    <h2>Try it yourself — live</h2>
+    <p class="sub">Ask one question; we run it across every model under prose vs JSON, live.
+       Add the expected answer to score correct/wrong/unparseable — otherwise you'll see the raw
+       answer and JSON compliance.</p>
+    <div class="liveform">
+      <div>
+        <label for="q">Question</label>
+        <textarea id="q" placeholder="What is the capital of Australia?"></textarea>
+      </div>
+      <div class="row2">
+        <div>
+          <label for="exp">Expected answer (optional — enables scoring)</label>
+          <input id="exp" placeholder="Canberra">
+        </div>
+        <button id="runbtn" onclick="runLive()">Run across models</button>
+      </div>
+    </div>
+    <div id="live"></div>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let RESULTS = null, SELECTED = null, CATEGORY = 'all';
+
+function esc(s){ return (s==null?'':String(s)).replace(/[&<>"]/g, c =>
+  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function pct(x){ return x==null ? '—' : Math.round(x*100)+'%'; }
+function taxColor(t){ const r=Math.max(0,Math.min(t,0.40))/0.40; return `hsl(${120*(1-r)} 60% 42%)`; }
+function badge(b){ return b ? `<span class="badge ${b}">${b}</span>` : ''; }
+function R(mk,id,cond){ return (RESULTS.responses||{})[`${mk}|${id}|${cond}`] || null; }
+function metFor(mk,cond){ return CATEGORY==='all' ? RESULTS.metrics[mk][cond] : RESULTS.by_category[mk][cond][CATEGORY]; }
+function taxFor(mk,cond){ return metFor(mk,'prose').correct_rate - metFor(mk,cond).correct_rate; }
+function setCategory(c){ CATEGORY=c; const el=document.getElementById('catfilter'); if(el) el.value=c; renderHeatmap(); if(SELECTED) renderDrill(); }
+function renderFilter(){
+  const cats = RESULTS.meta.categories || [];
+  const opts = ['all', ...cats].map(c =>
+    `<option value="${c}"${c===CATEGORY?' selected':''}>${c==='all'?'all items ('+RESULTS.meta.n_items+')':esc(c)}</option>`).join('');
+  $('filterrow').innerHTML = `<span style="font-size:.9rem;color:var(--muted)">Filter the heatmap by category:</span>
+    <select id="catfilter" onchange="setCategory(this.value)"
+      style="font:inherit;padding:3px 7px;border-radius:7px;border:1px solid var(--line);margin-left:4px">${opts}</select>`;
+}
+
+async function loadResults(){
+  for (const p of ['results.json','/results.json','../results.json']){
+    try { const r = await fetch(p, {cache:'no-store'}); if (r.ok) return await r.json(); } catch(e){}
+  }
+  return null;
+}
+
+function renderHeatmap(){
+  const m = RESULTS.meta, conds = m.conditions;
+  const nonProse = conds.filter(c => c !== 'prose');
+  let head = '<tr><th></th><th>prose (baseline)</th>' +
+    nonProse.map(c => `<th>${esc(c)}</th>`).join('') + '</tr>';
+  let body = '';
+  for (const mod of m.models){
+    const mk = mod.key;
+    let cells = `<td class="mlabel">${esc(mod.label)}<span class="slug">${esc(mod.model)}</span></td>`;
+    const proseM = metFor(mk, 'prose');
+    cells += `<td class="cell base" id="c_${mk}_prose" onclick="selectCell('${mk}','prose')">
+        <div class="big">${proseM.n ? pct(proseM.correct_rate) : '—'}</div>
+        <div class="lab">baseline${proseM.n ? '' : ' · none'}</div></td>`;
+    for (const c of nonProse){
+      const met = metFor(mk, c), tax = taxFor(mk, c);
+      if (!met.n){
+        cells += `<td class="cell" id="c_${mk}_${c}" style="background:#c9ced6;color:#5b6370"
+            onclick="selectCell('${mk}','${c}')"><div class="lab">no items<br>(dropped in pilot)</div></td>`;
+        continue;
+      }
+      let extra = '';
+      if (met.unparseable_rate) extra += `<div class="lab">unparseable ${pct(met.unparseable_rate)}</div>`;
+      if (met.pure_json_compliance != null) extra += `<div class="lab">pure-JSON ${pct(met.pure_json_compliance)}</div>`;
+      if (met.lexical_violation_rate != null) extra += `<div class="lab">banned word ${pct(met.lexical_violation_rate)}</div>`;
+      cells += `<td class="cell" id="c_${mk}_${c}" style="background:${taxColor(tax)}"
+          onclick="selectCell('${mk}','${c}')">
+          <div class="big">${pct(met.correct_rate)}</div>
+          <div class="tax">tax &minus;${Math.round(tax*100)} pts</div>${extra}</td>`;
+    }
+    body += `<tr>${cells}</tr>`;
+  }
+  const scope = CATEGORY==='all' ? `all ${m.n_items} items` : `category: ${esc(CATEGORY)}`;
+  $('heatmap').innerHTML = `<table class="hm"><thead>${head}</thead><tbody>${body}</tbody></table>
+    <p class="hint">Showing <b>${scope}</b>. Green + big drop = the model pays the tax.
+    Switch categories above: easy ones sit near 0; the multi-step ones collapse under JSON.
+    (High <i>unparseable</i> = fails the format, not the reasoning — tracked separately.)</p>`;
+  const s = m.settings || {};
+  $('hmmeta').innerHTML = `${m.n_items} ${m.piloted?'piloted ':''}items · generated ${esc(m.generated_at||'')}
+    · reasoning ${esc(s.reasoning||'')}`;
+}
+
+function selectCell(mk, cond){
+  SELECTED = {mk, cond};
+  document.querySelectorAll('td.cell').forEach(td => td.classList.remove('sel'));
+  const el = $(`c_${mk}_${cond}`); if (el) el.classList.add('sel');
+  renderDrill();
+  $('drillcard').scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+function answerCell(resp){
+  if (!resp) return '<span class="chip">no response</span>';
+  return `${badge(resp.bucket)}<div class="ans">${esc(resp.text) || '<i>(empty)</i>'}</div>`;
+}
+
+function renderDrill(){
+  const {mk, cond} = SELECTED;
+  const mod = RESULTS.meta.models.find(x => x.key === mk);
+  $('drillcard').style.display = '';
+  const met = metFor(mk, cond);
+  $('drilltitle').innerHTML = `${esc(mod.label)} — <span style="color:var(--muted)">${esc(cond)}</span>
+     &nbsp;<span style="font-size:.8rem;font-weight:400;color:var(--muted)">
+     correct ${pct(met.correct_rate)} · wrong ${pct(met.wrong_rate)} · unparseable ${pct(met.unparseable_rate)}</span>`;
+
+  const isProse = cond === 'prose';
+  let head = isProse
+    ? '<tr><th class="q">Question</th><th>Canonical</th><th>Answer</th></tr>'
+    : `<tr><th class="q">Question</th><th>Canonical</th><th>prose</th><th>${esc(cond)}</th></tr>`;
+  let rows = '';
+  for (const it of RESULTS.items){
+    if (CATEGORY !== 'all' && it.category !== CATEGORY) continue;
+    const here = R(mk, it.id, cond), prose = R(mk, it.id, 'prose');
+    const taxed = !isProse && prose && here && prose.bucket === 'correct' && here.bucket !== 'correct';
+    if (isProse){
+      rows += `<tr><td class="q">${esc(it.question)}</td>
+        <td class="canon">${esc(it.canonical_answer)}</td>
+        <td>${answerCell(here)}</td></tr>`;
+    } else {
+      rows += `<tr class="${taxed?'taxed':''}"><td class="q">${esc(it.question)}</td>
+        <td class="canon">${esc(it.canonical_answer)}</td>
+        <td>${answerCell(prose)}</td><td>${answerCell(here)}</td></tr>`;
+    }
+  }
+  $('drill').innerHTML = `<table class="rows"><thead>${head}</thead><tbody>${rows}</tbody></table>` +
+    (isProse ? '' : `<p class="hint">Rows shaded orange: correct in prose, no longer correct under
+      <i>${esc(cond)}</i> — the tax, per item.</p>`);
+}
+
+// ---------- Live panel ----------
+async function runLive(){
+  const question = $('q').value.trim();
+  const expected = $('exp').value.trim();
+  if (!question){ $('live').innerHTML = '<div class="banner">Enter a question first.</div>'; return; }
+  const btn = $('runbtn'); btn.disabled = true; btn.textContent = 'Running…';
+  $('live').innerHTML = '<p class="sub">Querying every model under prose and JSON…</p>';
+  try {
+    const r = await fetch('/live', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({question, expected})});
+    const data = await r.json();
+    if (!r.ok){ throw new Error(data.error || ('HTTP '+r.status)); }
+    renderLive(data);
+  } catch(e){
+    $('live').innerHTML = `<div class="banner">Live API unavailable (${esc(e.message)}).
+      The precomputed explorer above still works — the live panel needs the backend running
+      with a valid OPENROUTER_API_KEY.</div>`;
+  } finally { btn.disabled = false; btn.textContent = 'Run across models'; }
+}
+
+function liveCell(cell){
+  if (cell.error) return `<span class="chip err">${esc(cell.error)}</span>`;
+  let foot = '';
+  if (cell.bucket) foot = badge(cell.bucket);
+  else if (cell.pure_json != null){
+    foot = cell.pure_json ? '<span class="chip ok">valid JSON</span>'
+                          : '<span class="chip no">not pure JSON</span>';
+    if (cell.extracted != null) foot += ` <span class="chip">answer: ${esc(cell.extracted)}</span>`;
+  }
+  return `<div class="ans">${esc(cell.text) || '<i>(empty)</i>'}</div><div style="margin-top:5px">${foot}</div>`;
+}
+
+function renderLive(data){
+  const conds = data.conditions;
+  const byKey = {};
+  for (const c of data.results) byKey[`${c.model_key}|${c.condition}`] = c;
+  let html = `<p class="sub">“${esc(data.question)}”` +
+    (data.scored ? ` · expected <b>${esc(data.expected)}</b>` :
+     ' · <i>no expected answer given — showing raw answers + JSON compliance</i>') + '</p>';
+  html += `<div class="live-grid" style="grid-template-columns: 180px repeat(${conds.length}, 1fr)">`;
+  html += '<div></div>' + conds.map(c => `<div><b>${esc(c)}</b></div>`).join('');
+  for (const m of data.models){
+    html += `<div class="live-cell" style="border:0;display:flex;align-items:center;font-weight:600">${esc(m.label)}</div>`;
+    for (const c of conds){
+      html += `<div class="live-cell">${liveCell(byKey[`${m.key}|${c}`] || {error:'no data'})}</div>`;
+    }
+  }
+  html += '</div>';
+  $('live').innerHTML = html;
+}
+
+// ---------- boot ----------
+(async () => {
+  RESULTS = await loadResults();
+  if (!RESULTS){
+    $('banner').innerHTML = `<div class="banner">No <code>results.json</code> yet — run
+      <code>python -m eval.pilot</code> then <code>python -m eval.run_eval</code>, and the
+      heatmap will appear here. The live panel below works now.</div>`;
+    return;
+  }
+  renderFilter();
+  renderHeatmap();
+})();
+</script>
+</body>
+</html>

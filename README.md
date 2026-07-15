@@ -36,14 +36,19 @@ Llama 3.3 70B · GPT-4o, via OpenRouter). Easy tasks: ~0 tax. Multi-step reasoni
 under *answer-only* JSON — and recovers when the format permits reasoning.** That contrast
 isolates the cause: it's chain-of-thought suppression, not format rigidity (Fan 2026).
 
-Correct-rate on the multi-step items (prose baseline = 100% for every model; n = 20 / 20 / 18):
+Correct-rate on the multi-step items (prose baseline = 100% for every model; n = 50 / 50 / 48):
 
 | condition | what it does | 4-step | 5-step | 6-step |
 |---|---|---|---|---|
 | `prose` | free reasoning (control) | 100% | 100% | 100% |
-| `json` | answer-only — reasoning **forbidden** | **5–50%** | **5–15%** | **0–11%** |
-| `strict_schema` | rigid nested, but a `reasoning` field first | 90–95% | 85–95% | 78–94% |
+| `json` | answer-only — reasoning **forbidden** | **10–44%** | **6–10%** | **0–8%** |
+| `strict_schema` | rigid nested, but a `reasoning` field first | 94–100% | 94–100% | 94–100% |
 | `lexical` | ban the answer token; reasoning allowed | ~100%\* | ~100%\* | ~90%\* |
+
+**It reproduces on a real, externally-vetted set:** on 44 pilot-passed **GSM8K** word problems,
+answer-only JSON drops accuracy from 100% (prose) to **16–73%** (a −27 to −84pt tax); adding a
+`reasoning` field recovers it to 66–100%. So the effect isn't an artifact of our self-authored
+chains, and the recovery holds on real data too.
 
 Under `json` the models emit **bare, wrong numbers** (near-0% unparseable — genuine *reasoning*
 failure, not a parse failure). `strict_schema` is *more* rigid yet **recovers** most of the loss
@@ -54,7 +59,7 @@ holds 50% while Llama 8B is at 5% — but by 5–6 steps **every model collapses
 included.
 
 Two compliance signals, tracked separately from correctness: **Llama 3.3 70B emits *invalid* JSON
-~18% of the time** (it writes the expression, e.g. `{"answer": ((10+15)*2…)}` — a *format* failure,
+~23% of the time** (it writes the expression, e.g. `{"answer": ((10+15)*2…)}` — a *format* failure,
 correctly bucketed `unparseable`, not `wrong`), while **Gemma and GPT-4o rarely emit *pure* JSON**
 (0% / 7% — they wrap it in ```fences```) yet stay correct where they reason correctly.
 
@@ -144,7 +149,8 @@ few conditions × 3 models ≈ hundreds of calls, a few dollars).
 ## Layout
 
 ```
-data/stimuli.json          50 self-authored items (Section 5.1 rules)
+docs/METHODOLOGY.md        full methodology & code walkthrough (start here)
+data/stimuli.json          110 self-authored items (schema + rules in METHODOLOGY.md)
 eval/scorer.py             three-bucket scorer + compliance signals
 eval/conditions.py         prose · json · lexical · strict_schema prompts
 eval/harness.py            OpenRouter calls + on-disk response cache
@@ -152,6 +158,7 @@ eval/list_models.py        list / verify OpenRouter model slugs
 eval/pilot.py              Step 1: prose gate
 eval/run_eval.py           Steps 2-4: run + score -> results.json
 eval/make_heatmap.py       Step 5: static heatmap.html
+eval/ceiling_sweep.py      ungated reasoning-depth sweep -> ceiling.json + ceiling.html
 tests/test_scorer.py       offline scorer tests (no key needed)
 web/index.html             interactive explorer: heatmap -> drill-down + live panel
 web/server.py              tiny FastAPI backend (/results.json + /live)
