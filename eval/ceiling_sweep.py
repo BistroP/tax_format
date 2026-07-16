@@ -81,6 +81,8 @@ def run():
     acc = {c: {L: [] for L in LEVELS} for c in CONDITIONS}
     accm = {c: {L: {m["key"]: [] for m in config.MODELS} for L in LEVELS} for c in CONDITIONS}
     buckets = {c: {L: collections.Counter() for L in LEVELS} for c in CONDITIONS}
+    bucketsm = {c: {L: {m["key"]: collections.Counter() for m in config.MODELS}
+                    for L in LEVELS} for c in CONDITIONS}
     detail = {L: [] for L in LEVELS}  # per-level drill-down payload (one file per level)
     for it in items:
         L = it["_steps"]
@@ -92,6 +94,7 @@ def run():
                 hit = 1 if bucket == "correct" else 0
                 acc[c][L].append(hit); accm[c][L][m["key"]].append(hit)
                 buckets[c][L][bucket] += 1
+                bucketsm[c][L][m["key"]][bucket] += 1
                 cells[c][m["key"]] = {"bucket": bucket, "text": _clip(rec["text"]),
                                       "truncated": rec.get("stop_reason") == "length"}
         detail[L].append({"id": it["id"], "question": it["question"],
@@ -114,7 +117,12 @@ def run():
            "models": [{"key": m["key"], "label": m["label"]} for m in config.MODELS],
            "curve": curve,
            "buckets": {c: {L: dict(buckets[c][L]) for L in LEVELS} for c in CONDITIONS},
-           "prose_by_model": {L: {m["key"]: rate(accm["prose"][L][m["key"]]) for m in config.MODELS} for L in LEVELS}}
+           # Per-model, per-condition: lets the explorer's model dropdown redraw the
+           # curve for one model without shipping the per-level response files.
+           "curve_by_model": {c: {L: {m["key"]: rate(accm[c][L][m["key"]])
+                                      for m in config.MODELS} for L in LEVELS} for c in CONDITIONS},
+           "buckets_by_model": {c: {L: {mk: dict(cnt) for mk, cnt in bucketsm[c][L].items()}
+                                    for L in LEVELS} for c in CONDITIONS}}
     (config.ROOT / "ceiling.json").write_text(json.dumps(out, indent=2))
     _write_chart(curve)
 

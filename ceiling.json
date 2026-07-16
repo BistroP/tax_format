@@ -153,48 +153,535 @@
       }
     }
   },
-  "prose_by_model": {
-    "8": {
-      "llama8b": 1.0,
-      "mistral24b": 1.0,
-      "gemma27b": 1.0,
-      "llama70b": 0.99,
-      "gpt4o": 1.0
+  "curve_by_model": {
+    "prose": {
+      "8": {
+        "llama8b": 1.0,
+        "mistral24b": 1.0,
+        "gemma27b": 1.0,
+        "llama70b": 0.99,
+        "gpt4o": 1.0
+      },
+      "12": {
+        "llama8b": 0.96,
+        "mistral24b": 1.0,
+        "gemma27b": 1.0,
+        "llama70b": 0.99,
+        "gpt4o": 0.99
+      },
+      "16": {
+        "llama8b": 0.93,
+        "mistral24b": 1.0,
+        "gemma27b": 1.0,
+        "llama70b": 0.99,
+        "gpt4o": 1.0
+      },
+      "20": {
+        "llama8b": 0.87,
+        "mistral24b": 1.0,
+        "gemma27b": 1.0,
+        "llama70b": 0.99,
+        "gpt4o": 1.0
+      },
+      "28": {
+        "llama8b": 0.79,
+        "mistral24b": 1.0,
+        "gemma27b": 0.99,
+        "llama70b": 0.96,
+        "gpt4o": 1.0
+      },
+      "40": {
+        "llama8b": 0.68,
+        "mistral24b": 1.0,
+        "gemma27b": 0.97,
+        "llama70b": 0.95,
+        "gpt4o": 1.0
+      }
     },
-    "12": {
-      "llama8b": 0.96,
-      "mistral24b": 1.0,
-      "gemma27b": 1.0,
-      "llama70b": 0.99,
-      "gpt4o": 0.99
+    "json": {
+      "8": {
+        "llama8b": 0.01,
+        "mistral24b": 0.02,
+        "gemma27b": 0.03,
+        "llama70b": 0.02,
+        "gpt4o": 0.01
+      },
+      "12": {
+        "llama8b": 0.0,
+        "mistral24b": 0.01,
+        "gemma27b": 0.01,
+        "llama70b": 0.03,
+        "gpt4o": 0.02
+      },
+      "16": {
+        "llama8b": 0.02,
+        "mistral24b": 0.0,
+        "gemma27b": 0.02,
+        "llama70b": 0.0,
+        "gpt4o": 0.02
+      },
+      "20": {
+        "llama8b": 0.0,
+        "mistral24b": 0.01,
+        "gemma27b": 0.02,
+        "llama70b": 0.01,
+        "gpt4o": 0.01
+      },
+      "28": {
+        "llama8b": 0.0,
+        "mistral24b": 0.01,
+        "gemma27b": 0.0,
+        "llama70b": 0.0,
+        "gpt4o": 0.03
+      },
+      "40": {
+        "llama8b": 0.01,
+        "mistral24b": 0.02,
+        "gemma27b": 0.0,
+        "llama70b": 0.0,
+        "gpt4o": 0.01
+      }
     },
-    "16": {
-      "llama8b": 0.93,
-      "mistral24b": 1.0,
-      "gemma27b": 1.0,
-      "llama70b": 0.99,
-      "gpt4o": 1.0
+    "strict_schema": {
+      "8": {
+        "llama8b": 0.87,
+        "mistral24b": 0.96,
+        "gemma27b": 1.0,
+        "llama70b": 0.97,
+        "gpt4o": 0.98
+      },
+      "12": {
+        "llama8b": 0.78,
+        "mistral24b": 0.94,
+        "gemma27b": 0.98,
+        "llama70b": 0.97,
+        "gpt4o": 0.97
+      },
+      "16": {
+        "llama8b": 0.61,
+        "mistral24b": 0.93,
+        "gemma27b": 0.93,
+        "llama70b": 0.89,
+        "gpt4o": 0.69
+      },
+      "20": {
+        "llama8b": 0.63,
+        "mistral24b": 0.77,
+        "gemma27b": 0.8,
+        "llama70b": 0.68,
+        "gpt4o": 0.65
+      },
+      "28": {
+        "llama8b": 0.45,
+        "mistral24b": 0.05,
+        "gemma27b": 0.75,
+        "llama70b": 0.59,
+        "gpt4o": 0.25
+      },
+      "40": {
+        "llama8b": 0.15,
+        "mistral24b": 0.02,
+        "gemma27b": 0.45,
+        "llama70b": 0.17,
+        "gpt4o": 0.0
+      }
+    }
+  },
+  "buckets_by_model": {
+    "prose": {
+      "8": {
+        "llama8b": {
+          "correct": 100
+        },
+        "mistral24b": {
+          "correct": 100
+        },
+        "gemma27b": {
+          "correct": 100
+        },
+        "llama70b": {
+          "correct": 99,
+          "wrong": 1
+        },
+        "gpt4o": {
+          "correct": 100
+        }
+      },
+      "12": {
+        "llama8b": {
+          "correct": 96,
+          "wrong": 4
+        },
+        "mistral24b": {
+          "correct": 100
+        },
+        "gemma27b": {
+          "correct": 100
+        },
+        "llama70b": {
+          "correct": 99,
+          "wrong": 1
+        },
+        "gpt4o": {
+          "correct": 99,
+          "wrong": 1
+        }
+      },
+      "16": {
+        "llama8b": {
+          "correct": 93,
+          "wrong": 7
+        },
+        "mistral24b": {
+          "correct": 100
+        },
+        "gemma27b": {
+          "correct": 100
+        },
+        "llama70b": {
+          "correct": 99,
+          "wrong": 1
+        },
+        "gpt4o": {
+          "correct": 100
+        }
+      },
+      "20": {
+        "llama8b": {
+          "correct": 87,
+          "wrong": 13
+        },
+        "mistral24b": {
+          "correct": 100
+        },
+        "gemma27b": {
+          "correct": 100
+        },
+        "llama70b": {
+          "correct": 99,
+          "wrong": 1
+        },
+        "gpt4o": {
+          "correct": 100
+        }
+      },
+      "28": {
+        "llama8b": {
+          "correct": 79,
+          "wrong": 21
+        },
+        "mistral24b": {
+          "correct": 100
+        },
+        "gemma27b": {
+          "correct": 99,
+          "wrong": 1
+        },
+        "llama70b": {
+          "correct": 96,
+          "wrong": 4
+        },
+        "gpt4o": {
+          "correct": 100
+        }
+      },
+      "40": {
+        "llama8b": {
+          "correct": 68,
+          "wrong": 32
+        },
+        "mistral24b": {
+          "correct": 100
+        },
+        "gemma27b": {
+          "correct": 97,
+          "wrong": 3
+        },
+        "llama70b": {
+          "correct": 95,
+          "wrong": 5
+        },
+        "gpt4o": {
+          "correct": 100
+        }
+      }
     },
-    "20": {
-      "llama8b": 0.87,
-      "mistral24b": 1.0,
-      "gemma27b": 1.0,
-      "llama70b": 0.99,
-      "gpt4o": 1.0
+    "json": {
+      "8": {
+        "llama8b": {
+          "wrong": 95,
+          "unparseable": 4,
+          "correct": 1
+        },
+        "mistral24b": {
+          "wrong": 98,
+          "correct": 2
+        },
+        "gemma27b": {
+          "wrong": 97,
+          "correct": 3
+        },
+        "llama70b": {
+          "wrong": 67,
+          "unparseable": 31,
+          "correct": 2
+        },
+        "gpt4o": {
+          "wrong": 99,
+          "correct": 1
+        }
+      },
+      "12": {
+        "llama8b": {
+          "wrong": 92,
+          "unparseable": 8
+        },
+        "mistral24b": {
+          "wrong": 99,
+          "correct": 1
+        },
+        "gemma27b": {
+          "wrong": 99,
+          "correct": 1
+        },
+        "llama70b": {
+          "wrong": 62,
+          "unparseable": 35,
+          "correct": 3
+        },
+        "gpt4o": {
+          "wrong": 98,
+          "correct": 2
+        }
+      },
+      "16": {
+        "llama8b": {
+          "wrong": 91,
+          "correct": 2,
+          "unparseable": 7
+        },
+        "mistral24b": {
+          "wrong": 100
+        },
+        "gemma27b": {
+          "wrong": 98,
+          "correct": 2
+        },
+        "llama70b": {
+          "wrong": 87,
+          "unparseable": 13
+        },
+        "gpt4o": {
+          "wrong": 98,
+          "correct": 2
+        }
+      },
+      "20": {
+        "llama8b": {
+          "wrong": 93,
+          "unparseable": 7
+        },
+        "mistral24b": {
+          "wrong": 99,
+          "correct": 1
+        },
+        "gemma27b": {
+          "wrong": 98,
+          "correct": 2
+        },
+        "llama70b": {
+          "wrong": 82,
+          "unparseable": 17,
+          "correct": 1
+        },
+        "gpt4o": {
+          "wrong": 99,
+          "correct": 1
+        }
+      },
+      "28": {
+        "llama8b": {
+          "wrong": 90,
+          "unparseable": 10
+        },
+        "mistral24b": {
+          "wrong": 99,
+          "correct": 1
+        },
+        "gemma27b": {
+          "wrong": 100
+        },
+        "llama70b": {
+          "wrong": 89,
+          "unparseable": 11
+        },
+        "gpt4o": {
+          "wrong": 97,
+          "correct": 3
+        }
+      },
+      "40": {
+        "llama8b": {
+          "wrong": 93,
+          "unparseable": 6,
+          "correct": 1
+        },
+        "mistral24b": {
+          "wrong": 98,
+          "correct": 2
+        },
+        "gemma27b": {
+          "wrong": 100
+        },
+        "llama70b": {
+          "wrong": 82,
+          "unparseable": 18
+        },
+        "gpt4o": {
+          "wrong": 99,
+          "correct": 1
+        }
+      }
     },
-    "28": {
-      "llama8b": 0.79,
-      "mistral24b": 1.0,
-      "gemma27b": 0.99,
-      "llama70b": 0.96,
-      "gpt4o": 1.0
-    },
-    "40": {
-      "llama8b": 0.68,
-      "mistral24b": 1.0,
-      "gemma27b": 0.97,
-      "llama70b": 0.95,
-      "gpt4o": 1.0
+    "strict_schema": {
+      "8": {
+        "llama8b": {
+          "wrong": 13,
+          "correct": 87
+        },
+        "mistral24b": {
+          "correct": 96,
+          "wrong": 4
+        },
+        "gemma27b": {
+          "correct": 100
+        },
+        "llama70b": {
+          "correct": 97,
+          "unparseable": 2,
+          "wrong": 1
+        },
+        "gpt4o": {
+          "correct": 98,
+          "wrong": 2
+        }
+      },
+      "12": {
+        "llama8b": {
+          "correct": 78,
+          "wrong": 22
+        },
+        "mistral24b": {
+          "correct": 94,
+          "wrong": 6
+        },
+        "gemma27b": {
+          "correct": 98,
+          "wrong": 2
+        },
+        "llama70b": {
+          "correct": 97,
+          "unparseable": 1,
+          "wrong": 2
+        },
+        "gpt4o": {
+          "correct": 97,
+          "wrong": 3
+        }
+      },
+      "16": {
+        "llama8b": {
+          "correct": 61,
+          "wrong": 37,
+          "unparseable": 2
+        },
+        "mistral24b": {
+          "correct": 93,
+          "wrong": 7
+        },
+        "gemma27b": {
+          "correct": 93,
+          "wrong": 7
+        },
+        "llama70b": {
+          "correct": 89,
+          "wrong": 8,
+          "unparseable": 3
+        },
+        "gpt4o": {
+          "correct": 69,
+          "wrong": 31
+        }
+      },
+      "20": {
+        "llama8b": {
+          "correct": 63,
+          "wrong": 34,
+          "unparseable": 3
+        },
+        "mistral24b": {
+          "correct": 77,
+          "wrong": 23
+        },
+        "gemma27b": {
+          "wrong": 20,
+          "correct": 80
+        },
+        "llama70b": {
+          "correct": 68,
+          "wrong": 28,
+          "unparseable": 4
+        },
+        "gpt4o": {
+          "wrong": 35,
+          "correct": 65
+        }
+      },
+      "28": {
+        "llama8b": {
+          "correct": 45,
+          "wrong": 50,
+          "unparseable": 5
+        },
+        "mistral24b": {
+          "wrong": 95,
+          "correct": 5
+        },
+        "gemma27b": {
+          "correct": 75,
+          "wrong": 25
+        },
+        "llama70b": {
+          "wrong": 41,
+          "correct": 59
+        },
+        "gpt4o": {
+          "wrong": 75,
+          "correct": 25
+        }
+      },
+      "40": {
+        "llama8b": {
+          "wrong": 68,
+          "unparseable": 17,
+          "correct": 15
+        },
+        "mistral24b": {
+          "wrong": 98,
+          "correct": 2
+        },
+        "gemma27b": {
+          "wrong": 55,
+          "correct": 45
+        },
+        "llama70b": {
+          "wrong": 83,
+          "correct": 17
+        },
+        "gpt4o": {
+          "wrong": 100
+        }
+      }
     }
   }
 }

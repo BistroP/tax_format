@@ -91,20 +91,14 @@
 <body>
 <div class="wrap">
   <h1>Format-Tax Explorer</h1>
-  <p class="tagline">Watch a model answer correctly in prose, then fail the <i>identical</i>
+  <p class="tagline">When a model answers correctly in prose, but fails the <i>identical</i>
      question under a format constraint.</p>
-  <div class="frame">
-    <b>The finding is not ours.</b> Format restrictions degrade reasoning — established by
-    Tam et al. (2024), mechanistically <i>capacity competition</i> (Fan 2026). What's here is
-    the <b>instrument</b>, an <b>independent multi-vendor replication</b>, and a <b>scorer</b>
-    that tells “the model was wrong” apart from “I couldn't parse it.”
-  </div>
 
   <!-- ============ EXPLORER (spine) ============ -->
   <div class="card">
     <h2>The tax, by model × condition</h2>
     <p class="sub">Cell = accuracy under that condition · color = the tax (green none → red heavy).
-       Click any cell to drill into the actual questions and answers.</p>
+       Click any cell to drill into the actual questions and answers — click it again to collapse.</p>
     <div id="banner"></div>
     <div id="filterrow" style="margin:.2rem 0 1rem"></div>
     <div id="heatmap"></div>
@@ -127,6 +121,7 @@
     <p class="sub">Ungated sweep, 8 → 40 sequential steps (the pilot gate is off here on purpose:
        the failures are the point). <b>prose</b> = the ceiling with reasoning allowed ·
        <b>json</b> = the no-scratchpad floor · <b>strict_schema</b> = does a reasoning field survive depth?</p>
+    <div id="ceilfilter" style="margin:.2rem 0 .6rem"></div>
     <div id="ceiling"></div>
     <div id="ceildrill"></div>
   </div>
@@ -225,8 +220,13 @@ function renderHeatmap(){
 }
 
 function selectCell(mk, cond){
-  SELECTED = {mk, cond};
   document.querySelectorAll('td.cell').forEach(td => td.classList.remove('sel'));
+  if (SELECTED && SELECTED.mk === mk && SELECTED.cond === cond){  // same cell again -> collapse
+    SELECTED = null;
+    $('drillcard').style.display = 'none';
+    return;
+  }
+  SELECTED = {mk, cond};
   const el = $(`c_${mk}_${cond}`); if (el) el.classList.add('sel');
   renderDrill();
   $('drillcard').scrollIntoView({behavior:'smooth', block:'nearest'});
@@ -272,7 +272,33 @@ function renderDrill(){
 
 // ---------- Reasoning ceiling (depth sweep) ----------
 const CEIL_COLORS = {prose:'#2a78d6', json:'#e34948', strict_schema:'#eb6834'};
-let CEIL = null, CEIL_SHARDS = {}, CEIL_SEL = null;
+let CEIL = null, CEIL_SHARDS = {}, CEIL_SEL = null, CEIL_MODEL = 'all';
+
+// 'all' = the average over every model (what the curve shows by default); otherwise
+// one model's own curve. The averaged view hides a lot — GPT-4o goes 100% -> 0% under
+// strict_schema at 40 steps while Gemma holds 45%, and the mean of that is a bland 16%.
+function curveAt(cond, level){
+  return CEIL_MODEL === 'all' ? CEIL.curve[cond][level]
+                              : CEIL.curve_by_model[cond][level][CEIL_MODEL];
+}
+function ceilCounts(cond, level){
+  const b = (CEIL_MODEL === 'all' ? (CEIL.buckets || {})[cond]?.[level]
+                                  : (CEIL.buckets_by_model || {})[cond]?.[level]?.[CEIL_MODEL]) || {};
+  return {n: (b.correct||0) + (b.wrong||0) + (b.unparseable||0), ...b};
+}
+function setCeilModel(v){
+  CEIL_MODEL = v;
+  renderCeiling(CEIL);
+  if (CEIL_SEL){ const {level, cond} = CEIL_SEL; CEIL_SEL = null; ceilDrill(level, cond); }
+}
+function renderCeilFilter(){
+  const opts = [`<option value="all"${CEIL_MODEL==='all'?' selected':''}>all models (average)</option>`]
+    .concat(CEIL.models.map(m =>
+      `<option value="${esc(m.key)}"${CEIL_MODEL===m.key?' selected':''}>${esc(m.label)}</option>`)).join('');
+  $('ceilfilter').innerHTML = `<label style="font-size:.85rem;color:var(--muted)">Show:
+    <select id="ceilmodelsel" onchange="setCeilModel(this.value)"
+      style="font:inherit;padding:3px 7px;border-radius:7px;border:1px solid var(--line);margin-left:4px">${opts}</select></label>`;
+}
 
 async function fetchFirst(paths){
   for (const p of paths){
@@ -290,13 +316,13 @@ async function loadShard(level){
   return CEIL_SHARDS[level];
 }
 
-function ceilCounts(cond, level){
-  const b = (CEIL.buckets || {})[cond]?.[level] || {};
-  const n = (b.correct||0) + (b.wrong||0) + (b.unparseable||0);
-  return {n, ...b};
-}
-
 async function ceilDrill(level, cond){
+  if (CEIL_SEL && CEIL_SEL.level === level && CEIL_SEL.cond === cond){  // same point again -> collapse
+    CEIL_SEL = null;
+    renderCeiling(CEIL);   // repaint to drop the selection ring
+    $('ceildrill').innerHTML = '';
+    return;
+  }
   CEIL_SEL = {level, cond};
   renderCeiling(CEIL);   // repaint so the selected point shows its ring
   $('ceildrill').innerHTML = `<p class="hint">Loading the ${level}-step questions…</p>`;
@@ -307,10 +333,11 @@ async function ceilDrill(level, cond){
     return;
   }
   const c = ceilCounts(cond, level);
+  const shown = CEIL_MODEL === 'all' ? d.models : d.models.filter(m => m.key === CEIL_MODEL);
   const head = `<tr><th class="q">Question (${level} steps)</th><th>Answer</th>` +
-    d.models.map(m => `<th>${esc(m.label.replace(/ \(.*\)$/, ''))}</th>`).join('') + '</tr>';
+    shown.map(m => `<th>${esc(m.label.replace(/ \(.*\)$/, ''))}</th>`).join('') + '</tr>';
   const rows = d.items.map((it, i) => {
-    const cells = d.models.map(m => {
+    const cells = shown.map(m => {
       const cell = it.cells[cond][m.key];
       return `<td>${badge(cell.bucket)}${cell.truncated ? '<span class="chip">hit token cap</span>' : ''}
         <div class="ans" onclick="ceilFull(${level},${i},'${cond}','${m.key}',this)"
@@ -320,9 +347,9 @@ async function ceilDrill(level, cond){
   }).join('');
   $('ceildrill').innerHTML =
     `<h3 style="margin:1.2rem 0 .2rem">${level} steps · <span style="color:${CEIL_COLORS[cond]}">${esc(cond)}</span></h3>
-     <p class="hint" style="margin-top:0">${d.items.length} questions × ${d.models.length} models =
-       ${c.n} responses · correct ${c.correct||0} · wrong ${c.wrong||0} · unparseable ${c.unparseable||0}.
-       Click any response to expand it.</p>
+     <p class="hint" style="margin-top:0">${d.items.length} questions × ${shown.length}
+       ${shown.length === 1 ? 'model' : 'models'} = ${c.n} responses · correct ${c.correct||0} ·
+       wrong ${c.wrong||0} · unparseable ${c.unparseable||0}. Click any response to expand it.</p>
      <table class="rows"><thead>${head}</thead><tbody>${rows}</tbody></table>`;
   $('ceildrill').scrollIntoView({behavior:'smooth', block:'nearest'});
 }
@@ -335,6 +362,7 @@ function ceilFull(level, i, cond, mk, el){
 
 function renderCeiling(c){
   CEIL = c;
+  renderCeilFilter();
   const L = c.levels, conds = c.conditions, W = 660, H = 300, pad = 46;
   const X = s => pad + (s - L[0]) / (L[L.length-1] - L[0]) * (W - 2*pad);
   const Y = a => H - pad - a * (H - 2*pad);
@@ -348,17 +376,18 @@ function renderCeiling(c){
   for (const cond of conds){
     const col = CEIL_COLORS[cond] || '#666';
     const dash = cond === 'json' ? ' stroke-dasharray="6 4"' : '';
-    const pts = L.map(s => `${X(s).toFixed(0)},${Y(c.curve[cond][s]).toFixed(0)}`).join(' ');
+    const pts = L.map(s => `${X(s).toFixed(0)},${Y(curveAt(cond, s)).toFixed(0)}`).join(' ');
     g += `<polyline points="${pts}" fill="none" stroke="${col}" stroke-width="2.5"${dash}/>`;
     for (const s of L){
-      const x = X(s).toFixed(0), y = Y(c.curve[cond][s]).toFixed(0);
+      const x = X(s).toFixed(0), y = Y(curveAt(cond, s)).toFixed(0);
       const sel = CEIL_SEL && CEIL_SEL.level === s && CEIL_SEL.cond === cond;
       const k = ceilCounts(cond, s);
       if (sel) g += `<circle cx="${x}" cy="${y}" r="8" fill="none" stroke="${col}" stroke-width="2"/>`;
       g += `<circle cx="${x}" cy="${y}" r="${sel ? 5 : 3.5}" fill="${col}"/>`
          + `<circle cx="${x}" cy="${y}" r="13" fill="transparent" style="cursor:pointer"
               onclick="ceilDrill(${s},'${cond}')"><title>${cond} · ${s} steps · ${
-              Math.round(100*c.curve[cond][s])}% correct (n=${k.n} responses) — click to read them</title></circle>`;
+              Math.round(100*curveAt(cond, s))}% correct (n=${k.n} responses) — click to ${
+              sel ? 'collapse' : 'read them'}</title></circle>`;
     }
   }
   const legend = conds.map(cond =>
@@ -367,11 +396,15 @@ function renderCeiling(c){
     `<div class="legend" style="margin-bottom:6px">${legend}</div>
      <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto" role="img"
        aria-label="Accuracy versus reasoning steps: prose stays high, answer-only json sits near zero, strict_schema decays with depth."></svg>`.replace('></svg>', `>${g}</svg>`) +
-    `<p class="hint"><b>Click any point</b> to read the actual questions and answers behind it.
-     ${c.per_level} questions per level × ${c.models.length} models = ${c.per_level * c.models.length}
-     responses per point. <b>json</b> is flat on the floor — with no scratchpad you're capped at ~1–2
-     effective steps. <b>prose</b> holds high (only the 8B bends). <b>strict_schema</b> starts high and
-     <b>decays with depth</b> — a reasoning field is not a scratchpad.</p>`;
+    `<p class="hint"><b>Click any point</b> to read the actual questions and answers behind it
+     (click it again to collapse). ${c.per_level} questions per level ×
+     ${CEIL_MODEL === 'all' ? c.models.length + ' models = ' + c.per_level * c.models.length
+                            : '1 model = ' + c.per_level} responses per point.
+     <b>json</b> is flat on the floor — with no scratchpad you're capped at ~1–2 effective steps.
+     <b>strict_schema</b> starts high and <b>decays with depth</b> — a reasoning field is not a
+     scratchpad. ${CEIL_MODEL === 'all'
+       ? 'Averaged over five models, which <b>hides the most interesting part</b> — try the dropdown: at 40 steps GPT-4o falls 100% → <b>0%</b> under <i>strict_schema</i> while Gemma 27B holds 45%.'
+       : 'One model. Switch back to <i>all models</i> to compare it against the average.'}</p>`;
   $('ceilingcard').style.display = '';
 }
 
